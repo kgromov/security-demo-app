@@ -8,6 +8,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import javax.persistence.ElementCollection;
 import javax.persistence.Entity;
 import javax.persistence.Id;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -15,7 +16,8 @@ import java.util.stream.Collectors;
 
 @Entity
 @Getter
-@Setter()
+@Setter
+@NoArgsConstructor
 @EqualsAndHashCode(of = "id")
 @ToString
 @Builder
@@ -27,6 +29,7 @@ public class User implements UserDetails {
     private String email;
     private String phoneNumber;
     private boolean enabled;
+    private Instant createdAt;
     // TODO: change to roles
     @ElementCollection
     private Set<String> authorities = new HashSet<>();

@@ -18,10 +18,10 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     @Transactional(readOnly = true)
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        User user = userRepository.findByUserName(username).orElseThrow(() -> new UsernameNotFoundException(username));
+        User user = userRepository.findByUsername(username).orElseThrow(() -> new UsernameNotFoundException(username));
         // or try this one
-//        return org.springframework.security.core.userdetails.User.withUserDetails(user).build();
-        return org.springframework.security.core.userdetails.User.builder()
+        return org.springframework.security.core.userdetails.User.withUserDetails(user).build();
+        /*return org.springframework.security.core.userdetails.User.builder()
                 .username(user.getUsername())
                 .password(user.getPassword())
                 .authorities(user.getAuthorities())
@@ -29,6 +29,6 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .accountExpired(!user.isAccountNonExpired())
                 .accountLocked(!user.isAccountNonLocked())
                 .credentialsExpired(user.isCredentialsNonExpired())
-                .build();
+                .build();*/
     }
 }

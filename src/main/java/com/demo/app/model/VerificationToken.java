@@ -11,7 +11,7 @@ import javax.persistence.OneToOne;
 @Getter
 @NoArgsConstructor
 @Data
-public class ValidationToken {
+public class VerificationToken {
     @Id
     private String id;
     @Setter
