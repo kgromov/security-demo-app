@@ -18,6 +18,7 @@ import java.util.stream.Collectors;
 @Getter
 @Setter
 @NoArgsConstructor
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
 @EqualsAndHashCode(of = "id")
 @ToString
 @Builder

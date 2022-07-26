@@ -37,8 +37,10 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
 
     // declare UserDetailsService here?
 
-    public void configureGlobal(AuthenticationManagerBuilder authenticationManagerBuilder) throws Exception {
-        authenticationManagerBuilder.userDetailsService(userDetailsService)
+    @Override
+    protected void configure(AuthenticationManagerBuilder authenticationManagerBuilder) throws Exception {
+        authenticationManagerBuilder
+                .userDetailsService(userDetailsService)
                 .passwordEncoder(passwordEncoder());
     }
 
