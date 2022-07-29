@@ -1,14 +1,14 @@
 package com.demo.app.services;
 
-import com.demo.app.dtos.AuthenticationRequest;
-import com.demo.app.dtos.AuthenticationResponse;
-import com.demo.app.dtos.LoginRequest;
-import com.demo.app.dtos.SimpleMailMessage;
+import com.demo.app.config.JwtSettings;
+import com.demo.app.dtos.*;
 import com.demo.app.model.User;
 import com.demo.app.model.VerificationToken;
 import com.demo.app.repositories.UserRepository;
 import com.demo.app.repositories.VerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import javax.persistence.EntityNotFoundException;
+import java.time.Instant;
 import java.util.UUID;
 
 import static java.time.Instant.now;
@@ -31,6 +32,19 @@ public class AuthenticationService {
     private final MailSenderService mailSenderService;
     private final AuthenticationManager authenticationManager;
     private final TokenService tokenService;
+    private final RefreshTokenService refreshTokenService;
+    private final Environment environment;
+    private final JwtSettings jwtSettings;
+
+    @Value("${spring.application.name}")
+    private String appName;
+
+    @Value("${mail.verification.sender}")
+    private String sender;
+
+    @Value("${mail.verification.address}")
+    private String address;
+
 
     @Transactional
     public void signup(AuthenticationRequest registerRequest) {
@@ -45,13 +59,12 @@ public class AuthenticationService {
 
         // send verification link to user email
         String token = generateVerificationToken(user);
-        // TODO: replace with mail settings
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
-                .from("kostya.master@email.com")
+                .from(sender)
                 .to(user.getEmail())
                 .subject("Activate your account")
-                .body("Thank you for signing up to {{app_name}}, please click on the below url to activate your account :"
-                        + "{{app_url}}" + "/" + token)
+                .body(String.format("Thank you for signing up to %s, please click on the below url to activate your account :"
+                        + "%s/%s", appName, address, token))
                 .build();
         mailSenderService.sendMail(simpleMail);
     }
@@ -62,7 +75,22 @@ public class AuthenticationService {
         Authentication authenticate = authenticationManager.authenticate(usernameToken);
         SecurityContextHolder.getContext().setAuthentication(authenticate);
         String authenticationToken = tokenService.generateToken(authenticate);
-        return new AuthenticationResponse(authenticationToken, loginRequest.getUsername(), null);
+        return AuthenticationResponse.builder()
+                .authenticationToken(authenticationToken)
+                .refreshToken(refreshTokenService.generateToken().getToken())
+                .expiredAt(Instant.now().plus(jwtSettings.getExpiredAfter()))
+                .build();
+    }
+
+    public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
+        refreshTokenService.validateToken(refreshTokenRequest.getToken());
+        String token = tokenService.generateToken(refreshTokenRequest.getUsername());
+        return AuthenticationResponse.builder()
+                .authenticationToken(token)
+                .refreshToken(refreshTokenRequest.getToken())
+                .expiredAt(Instant.now().plusSeconds(jwtSettings.getExpiredAfter().getSeconds()))
+                .username(refreshTokenRequest.getUsername())
+                .build();
     }
 
     private String generateVerificationToken(User user) {
