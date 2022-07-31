@@ -2,10 +2,7 @@ package com.demo.app.model;
 
 import lombok.*;
 
-import javax.persistence.Entity;
-import javax.persistence.FetchType;
-import javax.persistence.Id;
-import javax.persistence.OneToOne;
+import javax.persistence.*;
 
 @Entity
 @Getter
@@ -13,7 +10,8 @@ import javax.persistence.OneToOne;
 @Data
 public class VerificationToken {
     @Id
-    private String id;
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
     @Setter
     private String token;
 

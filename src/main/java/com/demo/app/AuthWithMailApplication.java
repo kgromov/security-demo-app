@@ -1,5 +1,6 @@
 package com.demo.app;
 
+import com.demo.app.config.JwtSettings;
 import com.demo.app.dtos.SimpleMailMessage;
 import com.demo.app.services.MailSenderService;
 import org.springframework.boot.ApplicationArguments;
@@ -13,7 +14,7 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 
 @EnableWebSecurity
 @EnableAsync
-@EnableConfigurationProperties
+@EnableConfigurationProperties(JwtSettings.class)
 @SpringBootApplication
 public class AuthWithMailApplication {
 

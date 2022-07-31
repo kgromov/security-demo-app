@@ -11,8 +11,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import static org.springframework.http.HttpStatus.OK;
-
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/authentication")
@@ -26,7 +24,7 @@ public class AuthenticationController {
         return new ResponseEntity(HttpStatus.ACCEPTED);
     }
 
-    @GetMapping("accountVerification/{token}")
+    @GetMapping("/accountVerification/{token}")
     public ResponseEntity<String> verifyAccount(@PathVariable String token) {
         authenticationService.verifyAccount(token);
         return ResponseEntity.ok("Account Activated Successfully");
@@ -38,7 +36,7 @@ public class AuthenticationController {
         return ResponseEntity.ok(response);
     }
 
-    @PostMapping("refreshToken")
+    @PostMapping("/refreshToken")
     public AuthenticationResponse refreshTokens(@RequestBody RefreshTokenRequest refreshTokenRequest) {
         return authenticationService.refreshToken(refreshTokenRequest);
     }

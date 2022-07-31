@@ -7,6 +7,7 @@ import com.demo.app.model.VerificationToken;
 import com.demo.app.repositories.UserRepository;
 import com.demo.app.repositories.VerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -17,12 +18,15 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.annotation.PostConstruct;
 import javax.persistence.EntityNotFoundException;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
 import static java.time.Instant.now;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthenticationService {
@@ -45,6 +49,12 @@ public class AuthenticationService {
     @Value("${mail.verification.address}")
     private String address;
 
+    @PostConstruct
+    public void init(){
+        Duration expiredAfter = jwtSettings.getExpiredAfter();
+        log.info("JWT expiration setting = {}", expiredAfter);
+    }
+
 
     @Transactional
     public void signup(AuthenticationRequest registerRequest) {
@@ -64,11 +74,12 @@ public class AuthenticationService {
                 .to(user.getEmail())
                 .subject("Activate your account")
                 .body(String.format("Thank you for signing up to %s, please click on the below url to activate your account :"
-                        + "%s/%s", appName, address, token))
+                        + "%s/authentication/accountVerification/%s", appName, address, token))
                 .build();
         mailSenderService.sendMail(simpleMail);
     }
 
+    @Transactional
     public AuthenticationResponse signin(LoginRequest loginRequest) {
         UsernamePasswordAuthenticationToken usernameToken = new UsernamePasswordAuthenticationToken(loginRequest.getUsername(),
                 loginRequest.getPassword());
@@ -106,7 +117,7 @@ public class AuthenticationService {
     public void verifyAccount(String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new EntityNotFoundException("Invalid Token"));
-        String userId = verificationToken.getUser().getId();
+        Long userId = verificationToken.getUser().getId();
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new EntityNotFoundException("User Not Found with id - " + userId));
         user.setEnabled(true);

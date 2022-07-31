@@ -9,6 +9,7 @@ import java.time.Instant;
 
 @Data
 @NoArgsConstructor
+@AllArgsConstructor
 @Builder
 public class AuthenticationResponse {
     private String authenticationToken;
