@@ -52,9 +52,8 @@ public class AuthenticationService {
     @PostConstruct
     public void init(){
         Duration expiredAfter = jwtSettings.getExpiredAfter();
-        log.info("JWT expiration setting = {}", expiredAfter);
+        log.debug("JWT expiration setting = {}", expiredAfter);
     }
-
 
     @Transactional
     public void signup(AuthenticationRequest registerRequest) {
@@ -73,7 +72,7 @@ public class AuthenticationService {
                 .from(sender)
                 .to(user.getEmail())
                 .subject("Activate your account")
-                .body(String.format("Thank you for signing up to %s, please click on the below url to activate your account :"
+                .body(String.format("Thank you for signing up to %s, please click on the below url to activate your account: "
                         + "%s/authentication/accountVerification/%s", appName, address, token))
                 .build();
         mailSenderService.sendMail(simpleMail);
