@@ -1,6 +1,6 @@
 package com.demo.app.filters;
 
-import com.demo.app.services.TokenService;
+import com.demo.app.services.AccessTokenService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -22,14 +22,14 @@ import java.io.IOException;
 @Slf4j
 @RequiredArgsConstructor
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
-    private final TokenService tokenService;
+    private final AccessTokenService accessTokenService;
     private final UserDetailsService userDetailsService;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
         String jwt = getJwtFromRequest(request);
-        if (tokenService.isTokenValid(jwt)) {
-            String username = tokenService.getUsernameFromJWT(jwt);
+        if (accessTokenService.isTokenValid(jwt)) {
+            String username = accessTokenService.getUsernameFromJWT(jwt);
             UserDetails userDetails = userDetailsService.loadUserByUsername(username);
             UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                     userDetails, null, userDetails.getAuthorities());

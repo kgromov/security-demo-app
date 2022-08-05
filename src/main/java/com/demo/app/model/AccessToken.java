@@ -8,7 +8,7 @@ import javax.persistence.*;
 @Getter
 @NoArgsConstructor
 @Data
-public class VerificationToken {
+public class AccessToken {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;

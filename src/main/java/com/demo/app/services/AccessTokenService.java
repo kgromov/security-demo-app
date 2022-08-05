@@ -4,6 +4,7 @@ import com.demo.app.config.JwtSettings;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import io.jsonwebtoken.Jwts;
+import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
@@ -23,10 +24,10 @@ import java.time.Instant;
 import static io.jsonwebtoken.Jwts.parser;
 
 @Service
-public class TokenService {
+@RequiredArgsConstructor
+public class AccessTokenService {
+    private final JwtSettings jwtSettings;
     private KeyStore keyStore;
-    @Autowired
-    private JwtSettings jwtSettings;
 
     @PostConstruct
     @SneakyThrows
@@ -95,7 +96,7 @@ public class TokenService {
         String keyPassword = "s3cr3t";
         String keyAlias = "spring-security-demo";
         String keyPath = keyAlias + ".jks";
-        try (InputStream resourceAsStream = TokenService.class.getResourceAsStream("/static/" + keyPath)) {
+        try (InputStream resourceAsStream = AccessTokenService.class.getResourceAsStream("/static/" + keyPath)) {
             KeyStore keyStore = KeyStore.getInstance("JKS");
             keyStore.load(resourceAsStream, keyPassword.toCharArray());
             PrivateKey privateKey = (PrivateKey) keyStore.getKey(keyAlias, keyPassword.toCharArray());

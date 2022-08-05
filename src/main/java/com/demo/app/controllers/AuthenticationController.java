@@ -1,9 +1,6 @@
 package com.demo.app.controllers;
 
-import com.demo.app.dtos.AuthenticationRequest;
-import com.demo.app.dtos.AuthenticationResponse;
-import com.demo.app.dtos.LoginRequest;
-import com.demo.app.dtos.RefreshTokenRequest;
+import com.demo.app.dtos.*;
 import com.demo.app.services.AuthenticationService;
 import com.demo.app.services.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
@@ -19,9 +16,9 @@ public class AuthenticationController {
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/signup")
-    public ResponseEntity signup(@RequestBody AuthenticationRequest authenticationRequest) {
+    public ResponseEntity<Void> signup(@RequestBody AuthenticationRequest authenticationRequest) {
         authenticationService.signup(authenticationRequest);
-        return new ResponseEntity(HttpStatus.ACCEPTED);
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
     @GetMapping("/accountVerification/{token}")
@@ -45,5 +42,11 @@ public class AuthenticationController {
     public ResponseEntity<String> logout(@RequestBody RefreshTokenRequest refreshTokenRequest) {
         refreshTokenService.deleteToken(refreshTokenRequest.getToken());
         return ResponseEntity.ok("Refresh Token Deleted Successfully");
+    }
+
+    @PostMapping("/changePassword")
+    public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest) {
+        authenticationService.changePassword(changePasswordRequest);
+        return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 }
