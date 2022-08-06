@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -23,25 +24,26 @@ import javax.annotation.PostConstruct;
 import javax.persistence.EntityNotFoundException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Set;
 import java.util.UUID;
 
+import static java.lang.String.format;
 import static java.time.Instant.now;
 
 // TODO: too many responsibilities - refactor
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class AuthenticationService {
-    private final UserRepository userRepository;
+public class UserCredentialsService {
     private final AccessTokenRepository accessTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final MailSenderService mailSenderService;
-    private final AuthenticationManager authenticationManager;
     private final AccessTokenService accessTokenService;
     private final RefreshTokenService refreshTokenService;
     private final UserDetailsManager userDetailsManager;
     private final Environment environment;
     private final JwtSettings jwtSettings;
+    private final UsernamePasswordAuthenticationService authenticationService;
 
     @Value("${spring.application.name}")
     private String appName;
@@ -66,8 +68,9 @@ public class AuthenticationService {
                 .email(registerRequest.getEmail())
                 .createdAt(now())
                 .enabled(false)
+                .authorities(Set.of("ROLE_USER"))
                 .build();
-        userRepository.save(user);
+        userDetailsManager.createUser(user);
 
         // send verification link to user email
         String token = generateAccessToken(user);
@@ -75,7 +78,7 @@ public class AuthenticationService {
                 .from(sender)
                 .to(user.getEmail())
                 .subject("Activate your account")
-                .body(String.format("Thank you for signing up to %s, please click on the below url to activate your account: "
+                .body(format("Thank you for signing up to %s, please click on the below url to activate your account: "
                         + "%s/authentication/accountVerification/%s", appName, address, token))
                 .build();
         mailSenderService.sendMail(simpleMail);
@@ -83,13 +86,8 @@ public class AuthenticationService {
 
     @Transactional
     public AuthenticationResponse signin(LoginRequest loginRequest) {
-        // TODO: move logic regarding UsernamePasswordAuthenticationToken to another service.
-        // Probably rename current service => LoginService/UserService?
-        UsernamePasswordAuthenticationToken usernameToken = new UsernamePasswordAuthenticationToken(loginRequest.getUsername(),
-                loginRequest.getPassword());
-        Authentication authenticate = authenticationManager.authenticate(usernameToken);
-        SecurityContextHolder.getContext().setAuthentication(authenticate);
-        String authenticationToken = accessTokenService.generateToken(authenticate);
+        Authentication authentication = authenticationService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
+        String authenticationToken = accessTokenService.generateToken(authentication);
         return AuthenticationResponse.builder()
                 .authenticationToken(authenticationToken)
                 .refreshToken(refreshTokenService.generateToken().getToken())
@@ -120,24 +118,32 @@ public class AuthenticationService {
     public void verifyAccount(String token) {
         AccessToken accessToken = accessTokenRepository.findByToken(token)
                 .orElseThrow(() -> new EntityNotFoundException("Invalid Token"));
-        Long userId = accessToken.getUser().getId();
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new EntityNotFoundException("User Not Found with id - " + userId));
+        User user = (User) userDetailsManager.loadUserByUsername(accessToken.getUser().getUsername());
         user.setEnabled(true);
-        userRepository.save(user);
+        userDetailsManager.updateUser(user);
     }
 
     // the very naive implementation with open password in request
     public void changePassword(ChangePasswordRequest changePasswordRequest) {
-        // TODO: verification
         User principal = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        userDetailsManager.changePassword(changePasswordRequest.getOldPassword(), changePasswordRequest.getNewPassword());
+        verifyUserFromRequest(principal, changePasswordRequest);
+        authenticationService.unauthenticate(principal.getUsername(), changePasswordRequest.getOldPassword());
+        String encodedPassword = passwordEncoder.encode(changePasswordRequest.getNewPassword());
+        userDetailsManager.changePassword(changePasswordRequest.getOldPassword(), encodedPassword);
+        authenticationService.authenticate(principal.getUsername(), changePasswordRequest.getNewPassword());
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
                 .from(sender)
                 .to(principal.getEmail())
                 .subject("Changing password")
-                .body(String.format("Password was successfully changed for user %s", principal.getUsername()))
+                .body(format("Password was successfully changed for user %s", principal.getUsername()))
                 .build();
         mailSenderService.sendMail(simpleMail);
+    }
+
+    private void verifyUserFromRequest(User principal, ChangePasswordRequest changePasswordRequest) {
+        if (principal == null || !principal.getUsername().equals(changePasswordRequest.getUsername())) {
+            throw new AccessDeniedException(format("Invalid request to change password - " +
+                    "user %s is not found in Security context", changePasswordRequest.getUsername()));
+        }
     }
 }

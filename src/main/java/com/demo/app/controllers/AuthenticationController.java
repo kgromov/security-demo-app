@@ -1,7 +1,7 @@
 package com.demo.app.controllers;
 
 import com.demo.app.dtos.*;
-import com.demo.app.services.AuthenticationService;
+import com.demo.app.services.UserCredentialsService;
 import com.demo.app.services.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -12,30 +12,30 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 @RequestMapping("/authentication")
 public class AuthenticationController {
-    private final AuthenticationService authenticationService;
+    private final UserCredentialsService userCredentialsService;
     private final RefreshTokenService refreshTokenService;
 
     @PostMapping("/signup")
     public ResponseEntity<Void> signup(@RequestBody AuthenticationRequest authenticationRequest) {
-        authenticationService.signup(authenticationRequest);
+        userCredentialsService.signup(authenticationRequest);
         return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
     @GetMapping("/accountVerification/{token}")
     public ResponseEntity<String> verifyAccount(@PathVariable String token) {
-        authenticationService.verifyAccount(token);
+        userCredentialsService.verifyAccount(token);
         return ResponseEntity.ok("Account Activated Successfully");
     }
 
     @PostMapping("/signin")
     public ResponseEntity<AuthenticationResponse> signin(@RequestBody LoginRequest loginRequest) {
-        AuthenticationResponse response = authenticationService.signin(loginRequest);
+        AuthenticationResponse response = userCredentialsService.signin(loginRequest);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/refreshToken")
     public AuthenticationResponse refreshTokens(@RequestBody RefreshTokenRequest refreshTokenRequest) {
-        return authenticationService.refreshToken(refreshTokenRequest);
+        return userCredentialsService.refreshToken(refreshTokenRequest);
     }
 
     @PostMapping("/logout")
@@ -46,7 +46,7 @@ public class AuthenticationController {
 
     @PostMapping("/changePassword")
     public ResponseEntity<Void> changePassword(@RequestBody ChangePasswordRequest changePasswordRequest) {
-        authenticationService.changePassword(changePasswordRequest);
+        userCredentialsService.changePassword(changePasswordRequest);
         return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 }

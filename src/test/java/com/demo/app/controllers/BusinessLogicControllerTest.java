@@ -1,6 +1,6 @@
 package com.demo.app.controllers;
 
-import com.demo.app.services.AuthenticationService;
+import com.demo.app.services.UserCredentialsService;
 import com.demo.app.services.RefreshTokenService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,7 +21,7 @@ class BusinessLogicControllerTest {
     @Autowired
     private MockMvc mockMvc;
     @MockBean
-    private AuthenticationService authenticationService;
+    private UserCredentialsService userCredentialsService;
     @MockBean
     private RefreshTokenService refreshTokenService;
 

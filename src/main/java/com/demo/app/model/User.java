@@ -32,7 +32,7 @@ public class User implements UserDetails {
     private boolean enabled;
     private Instant createdAt;
     // TODO: change to roles
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     private Set<String> authorities = new HashSet<>();
 
     @Override
