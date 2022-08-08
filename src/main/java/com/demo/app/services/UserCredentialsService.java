@@ -15,6 +15,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
@@ -44,6 +45,8 @@ public class UserCredentialsService {
     private final Environment environment;
     private final JwtSettings jwtSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
+    private final OneTimePasswordService oneTimePasswordService;
+    private final SmsService smsService;
 
     @Value("${spring.application.name}")
     private String appName;
@@ -66,6 +69,7 @@ public class UserCredentialsService {
                 .username(registerRequest.getUsername())
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
                 .email(registerRequest.getEmail())
+                .phoneNumber(registerRequest.getPhoneNumber())
                 .createdAt(now())
                 .enabled(false)
                 .authorities(Set.of("ROLE_USER"))
@@ -86,8 +90,15 @@ public class UserCredentialsService {
 
     @Transactional
     public AuthenticationResponse signin(LoginRequest loginRequest) {
+        User user = (User) userDetailsManager.loadUserByUsername(loginRequest.getUsername());
+        verifyLoginPassword(user, loginRequest);
+        // TODO: complete flow - here will be just sending otp and token generation in another endpoint
         Authentication authentication = authenticationService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
         String authenticationToken = accessTokenService.generateToken(authentication);
+        // send sms code for verification
+        String otpCode = oneTimePasswordService.generateCode();
+        smsService.sendCode(user.getPhoneNumber(), otpCode);
+
         return AuthenticationResponse.builder()
                 .authenticationToken(authenticationToken)
                 .refreshToken(refreshTokenService.generateToken().getToken())
@@ -138,6 +149,12 @@ public class UserCredentialsService {
                 .body(format("Password was successfully changed for user %s", principal.getUsername()))
                 .build();
         mailSenderService.sendMail(simpleMail);
+    }
+
+    private void verifyLoginPassword(UserDetails user, LoginRequest loginRequest) {
+        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            throw new AccessDeniedException("Login failed: password does not match");
+        }
     }
 
     private void verifyUserFromRequest(User principal, ChangePasswordRequest changePasswordRequest) {
