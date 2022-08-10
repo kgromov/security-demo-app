@@ -3,11 +3,10 @@ package com.demo.app.services;
 import com.demo.app.config.JwtSettings;
 import com.demo.app.dtos.AuthenticationResponse;
 import com.demo.app.dtos.RefreshTokenRequest;
-import com.demo.app.model.AccessToken;
+import com.demo.app.model.VerificationToken;
 import com.demo.app.model.User;
-import com.demo.app.repositories.AccessTokenRepository;
+import com.demo.app.repositories.VerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -21,7 +20,7 @@ import java.util.UUID;
 public class TokensManager {
     private final AccessTokenService accessTokenService;
     private final RefreshTokenService refreshTokenService;
-    private final AccessTokenRepository accessTokenRepository;
+    private final VerificationTokenRepository verificationTokenRepository;
     private final JwtSettings jwtSettings;
 
     public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
@@ -36,10 +35,10 @@ public class TokensManager {
 
     private String generateAccessToken(User user) {
         String token = UUID.randomUUID().toString();
-        AccessToken accessToken = new AccessToken();
-        accessToken.setToken(token);
-        accessToken.setUser(user);
-        accessTokenRepository.save(accessToken);
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setToken(token);
+        verificationToken.setUser(user);
+        verificationTokenRepository.save(verificationToken);
         return token;
     }
 }

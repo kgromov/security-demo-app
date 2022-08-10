@@ -31,7 +31,6 @@ public class User implements UserDetails {
     private String phoneNumber;
     private boolean enabled;
     private Instant createdAt;
-    // TODO: change to roles
     @ElementCollection(fetch = FetchType.EAGER)
     private Set<String> authorities = new HashSet<>();
 

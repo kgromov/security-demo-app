@@ -1,5 +1,6 @@
 package com.demo.app.services;
 
+import com.demo.app.config.SmsSettings;
 import com.demo.app.dtos.OneTimePasswordRequest;
 import com.demo.app.model.OneTimePassword;
 import com.demo.app.model.User;
@@ -14,24 +15,26 @@ import org.springframework.transaction.annotation.Transactional;
 import javax.persistence.EntityNotFoundException;
 import java.security.SecureRandom;
 
-// TODO: move to interface; make 2 implementations: current - db, sms - another one
+// TODO: move to interface; make 2 implementations: current - db, another one with cache
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class OneTimePasswordService {
     private final OneTimePasswordRepository oneTimePasswordRepository;
+    private final SmsService smsService;
 
     @Transactional
     public void generateOTP(User user) {
-        String code = this.generateCode();
+        String otpCode = this.generateCode();
         oneTimePasswordRepository.findByUsername(user.getUsername())
-                .ifPresentOrElse(otp -> otp.setCode(code), () -> {
+                .ifPresentOrElse(otp -> otp.setCode(otpCode), () -> {
                     OneTimePassword oneTimePassword = new OneTimePassword();
                     oneTimePassword.setUsername(user.getUsername());
-                    oneTimePassword.setCode(code);
+                    oneTimePassword.setCode(otpCode);
                     oneTimePasswordRepository.save(oneTimePassword);
                 });
-
+        // send sms code for verification
+        smsService.sendCode(user.getPhoneNumber(), otpCode);
     }
 
     @Transactional(readOnly = true)
@@ -42,7 +45,7 @@ public class OneTimePasswordService {
     }
 
     @SneakyThrows
-    public String generateCode() {
+    private String generateCode() {
         SecureRandom random = SecureRandom.getInstanceStrong();
         int code = random.nextInt(9000) + 1000;
         return String.valueOf(code);

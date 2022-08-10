@@ -2,18 +2,19 @@ package com.demo.app.services;
 
 import com.demo.app.config.JwtSettings;
 import com.demo.app.dtos.*;
-import com.demo.app.model.AccessToken;
+import com.demo.app.model.VerificationToken;
 import com.demo.app.model.User;
-import com.demo.app.repositories.AccessTokenRepository;
-import com.demo.app.repositories.UserRepository;
+import com.demo.app.repositories.VerificationTokenRepository;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -25,18 +26,20 @@ import javax.annotation.PostConstruct;
 import javax.persistence.EntityNotFoundException;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static java.lang.String.format;
 import static java.time.Instant.now;
+import static java.util.concurrent.TimeUnit.MINUTES;
 
 // TODO: too many responsibilities - refactor
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserCredentialsService {
-    private final AccessTokenRepository accessTokenRepository;
+    private final VerificationTokenRepository verificationTokenRepository;
     private final PasswordEncoder passwordEncoder;
     private final MailSenderService mailSenderService;
     private final AccessTokenService accessTokenService;
@@ -46,7 +49,12 @@ public class UserCredentialsService {
     private final JwtSettings jwtSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;
-    private final SmsService smsService;
+
+
+    private final Cache<String, Authentication> authentications = Caffeine.newBuilder()
+            .expireAfterWrite(5, MINUTES)
+            .maximumSize(100)
+            .build();
 
     @Value("${spring.application.name}")
     private String appName;
@@ -64,7 +72,7 @@ public class UserCredentialsService {
     }
 
     @Transactional
-    public void signup(AuthenticationRequest registerRequest) {
+    public void signup(RegistrationRequest registerRequest) {
         User user = User.builder()
                 .username(registerRequest.getUsername())
                 .password(passwordEncoder.encode(registerRequest.getPassword()))
@@ -89,21 +97,30 @@ public class UserCredentialsService {
     }
 
     @Transactional
-    public AuthenticationResponse signin(LoginRequest loginRequest) {
+    public void login(LoginRequest loginRequest) {
         User user = (User) userDetailsManager.loadUserByUsername(loginRequest.getUsername());
         verifyLoginPassword(user, loginRequest);
-        // TODO: complete flow - here will be just sending otp and token generation in another endpoint
-        Authentication authentication = authenticationService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
-        String authenticationToken = accessTokenService.generateToken(authentication);
-        // send sms code for verification
-        String otpCode = oneTimePasswordService.generateCode();
-        smsService.sendCode(user.getPhoneNumber(), otpCode);
+        authenticationService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
+        oneTimePasswordService.generateOTP(user);
+    }
 
-        return AuthenticationResponse.builder()
+    // TODO: add logic with invalid attempts - either block or reauthenticate
+    // Add logic for otp code expiration - seems one more endpoint required for this or login with credentials again
+    public Optional<AuthenticationResponse> confirmLogin(OneTimePasswordRequest passwordRequest) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication == null || !authentication.getName().equals(passwordRequest.getUsername())) {
+            throw new BadCredentialsException("User is not authenticated");
+        }
+        if (!oneTimePasswordService.isOtpValid(passwordRequest)) {
+            log.warn("Invalid OTP code");
+            return Optional.empty();
+        }
+        String authenticationToken = accessTokenService.generateToken(authentication);
+        return Optional.ofNullable(AuthenticationResponse.builder()
                 .authenticationToken(authenticationToken)
                 .refreshToken(refreshTokenService.generateToken().getToken())
                 .expiredAt(Instant.now().plus(jwtSettings.getExpiredAfter()))
-                .build();
+                .build());
     }
 
     public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
@@ -118,22 +135,23 @@ public class UserCredentialsService {
 
     private String generateAccessToken(User user) {
         String token = UUID.randomUUID().toString();
-        AccessToken accessToken = new AccessToken();
-        accessToken.setToken(token);
-        accessToken.setUser(user);
-        accessTokenRepository.save(accessToken);
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setToken(token);
+        verificationToken.setUser(user);
+        verificationTokenRepository.save(verificationToken);
         return token;
     }
 
     @Transactional
     public void verifyAccount(String token) {
-        AccessToken accessToken = accessTokenRepository.findByToken(token)
+        VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
                 .orElseThrow(() -> new EntityNotFoundException("Invalid Token"));
-        User user = (User) userDetailsManager.loadUserByUsername(accessToken.getUser().getUsername());
+        User user = (User) userDetailsManager.loadUserByUsername(verificationToken.getUser().getUsername());
         user.setEnabled(true);
         userDetailsManager.updateUser(user);
     }
 
+    // Don't authenticate but send a link to login
     // the very naive implementation with open password in request
     public void changePassword(ChangePasswordRequest changePasswordRequest) {
         User principal = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();

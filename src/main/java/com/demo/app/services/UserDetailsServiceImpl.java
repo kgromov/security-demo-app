@@ -13,6 +13,7 @@ import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.persistence.EntityExistsException;
 import java.util.Optional;
 
 @Primary
@@ -32,6 +33,9 @@ public class UserDetailsServiceImpl implements UserDetailsManager {
     @Override
     @Transactional
     public void createUser(UserDetails user) {
+        if (userExists(user.getUsername())) {
+            throw new EntityExistsException("User " + user.getUsername() + " already exists");
+        }
         userRepository.save((User) user);
     }
 
