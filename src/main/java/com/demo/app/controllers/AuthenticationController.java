@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.Optional;
 
+// TODO: Advice controller to map exceptions
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/authentication")
@@ -46,11 +47,10 @@ public class AuthenticationController {
         return userCredentialsService.refreshToken(refreshTokenRequest);
     }
 
-    // TODO: reauthenticate as well
     @PostMapping("/logout")
     public ResponseEntity<String> logout(@RequestBody RefreshTokenRequest refreshTokenRequest) {
-        refreshTokenService.deleteToken(refreshTokenRequest.getToken());
-        return ResponseEntity.ok("Refresh Token Deleted Successfully");
+        userCredentialsService.logout(refreshTokenRequest);
+        return ResponseEntity.ok(refreshTokenRequest.getUsername() + " is logged out");
     }
 
     @PostMapping("/changePassword")

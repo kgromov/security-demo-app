@@ -24,7 +24,7 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(refreshToken);
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public void validateToken(String token) {
         refreshTokenRepository.findByToken(token)
                 .orElseThrow(() -> new EntityNotFoundException("Refresh token is invalid"));

@@ -2,11 +2,9 @@ package com.demo.app.services;
 
 import com.demo.app.config.JwtSettings;
 import com.demo.app.dtos.*;
-import com.demo.app.model.VerificationToken;
 import com.demo.app.model.User;
+import com.demo.app.model.VerificationToken;
 import com.demo.app.repositories.VerificationTokenRepository;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +12,6 @@ import org.springframework.core.env.Environment;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,7 +29,6 @@ import java.util.UUID;
 
 import static java.lang.String.format;
 import static java.time.Instant.now;
-import static java.util.concurrent.TimeUnit.MINUTES;
 
 // TODO: too many responsibilities - refactor
 @Slf4j
@@ -49,12 +45,6 @@ public class UserCredentialsService {
     private final JwtSettings jwtSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;
-
-
-    private final Cache<String, Authentication> authentications = Caffeine.newBuilder()
-            .expireAfterWrite(5, MINUTES)
-            .maximumSize(100)
-            .build();
 
     @Value("${spring.application.name}")
     private String appName;
@@ -104,8 +94,8 @@ public class UserCredentialsService {
         oneTimePasswordService.generateOTP(user);
     }
 
-    // TODO: add logic with invalid attempts - either block or reauthenticate
-    // Add logic for otp code expiration - seems one more endpoint required for this or login with credentials again
+    // TODO: add logic with invalid attempts - either block (lock) or reauthenticate
+    @Transactional
     public Optional<AuthenticationResponse> confirmLogin(OneTimePasswordRequest passwordRequest) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.getName().equals(passwordRequest.getUsername())) {
@@ -113,6 +103,9 @@ public class UserCredentialsService {
         }
         if (!oneTimePasswordService.isOtpValid(passwordRequest)) {
             log.warn("Invalid OTP code");
+            User user = (User) userDetailsManager.loadUserByUsername(passwordRequest.getUsername());
+            // TODO: Add logic for otp code expiration - seems one more endpoint required for this or login with credentials again
+            oneTimePasswordService.generateOTP(user);
             return Optional.empty();
         }
         String authenticationToken = accessTokenService.generateToken(authentication);
@@ -133,15 +126,6 @@ public class UserCredentialsService {
                 .build();
     }
 
-    private String generateAccessToken(User user) {
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = new VerificationToken();
-        verificationToken.setToken(token);
-        verificationToken.setUser(user);
-        verificationTokenRepository.save(verificationToken);
-        return token;
-    }
-
     @Transactional
     public void verifyAccount(String token) {
         VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
@@ -151,7 +135,14 @@ public class UserCredentialsService {
         userDetailsManager.updateUser(user);
     }
 
-    // Don't authenticate but send a link to login
+    @Transactional
+    public void logout(RefreshTokenRequest refreshTokenRequest) {
+        refreshTokenService.deleteToken(refreshTokenRequest.getToken());
+        log.debug("Refresh Token Deleted Successfully");
+        authenticationService.unauthenticate(refreshTokenRequest.getUsername(), null);
+        log.debug("User " + refreshTokenRequest.getUsername() + " is logged out");
+    }
+
     // the very naive implementation with open password in request
     public void changePassword(ChangePasswordRequest changePasswordRequest) {
         User principal = (User) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -159,14 +150,28 @@ public class UserCredentialsService {
         authenticationService.unauthenticate(principal.getUsername(), changePasswordRequest.getOldPassword());
         String encodedPassword = passwordEncoder.encode(changePasswordRequest.getNewPassword());
         userDetailsManager.changePassword(changePasswordRequest.getOldPassword(), encodedPassword);
-        authenticationService.authenticate(principal.getUsername(), changePasswordRequest.getNewPassword());
+        String mailBody = new StringBuilder()
+                .append("Password was successfully changed for user")
+                .append(principal.getUsername()).append('\n')
+                .append("Navigate to ").append(address).append("/authentication/login")
+                .append("  login with new credentials")
+                .toString();
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
                 .from(sender)
                 .to(principal.getEmail())
                 .subject("Changing password")
-                .body(format("Password was successfully changed for user %s", principal.getUsername()))
+                .body(mailBody)
                 .build();
         mailSenderService.sendMail(simpleMail);
+    }
+
+    private String generateAccessToken(User user) {
+        String token = UUID.randomUUID().toString();
+        VerificationToken verificationToken = new VerificationToken();
+        verificationToken.setToken(token);
+        verificationToken.setUser(user);
+        verificationTokenRepository.save(verificationToken);
+        return token;
     }
 
     private void verifyLoginPassword(UserDetails user, LoginRequest loginRequest) {
