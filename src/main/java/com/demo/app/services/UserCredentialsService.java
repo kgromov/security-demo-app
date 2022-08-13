@@ -4,7 +4,6 @@ import com.demo.app.config.JwtSettings;
 import com.demo.app.dtos.*;
 import com.demo.app.model.User;
 import com.demo.app.model.VerificationToken;
-import com.demo.app.repositories.VerificationTokenRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -19,23 +18,21 @@ import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import javax.annotation.PostConstruct;
-import javax.persistence.EntityNotFoundException;
-import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.String.format;
 import static java.time.Instant.now;
 
-// TODO: too many responsibilities - refactor
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserCredentialsService {
-    private final VerificationTokenRepository verificationTokenRepository;
+    private final VerificationTokenService verificationTokenService;
     private final PasswordEncoder passwordEncoder;
     private final MailSenderService mailSenderService;
     private final AccessTokenService accessTokenService;
@@ -45,6 +42,7 @@ public class UserCredentialsService {
     private final JwtSettings jwtSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;
+    private final UserInvalidLoginService userInvalidLoginService;
 
     @Value("${spring.application.name}")
     private String appName;
@@ -54,12 +52,6 @@ public class UserCredentialsService {
 
     @Value("${mail.verification.address}")
     private String address;
-
-    @PostConstruct
-    public void init() {
-        Duration expiredAfter = jwtSettings.getExpiredAfter();
-        log.debug("JWT expiration setting = {}", expiredAfter);
-    }
 
     @Transactional
     public void signup(RegistrationRequest registerRequest) {
@@ -75,7 +67,7 @@ public class UserCredentialsService {
         userDetailsManager.createUser(user);
 
         // send verification link to user email
-        String token = generateAccessToken(user);
+        String token = verificationTokenService.generateVerificationToken(user);
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
                 .from(sender)
                 .to(user.getEmail())
@@ -94,7 +86,6 @@ public class UserCredentialsService {
         oneTimePasswordService.generateOTP(user);
     }
 
-    // TODO: add logic with invalid attempts - either block (lock) or reauthenticate
     @Transactional
     public Optional<AuthenticationResponse> confirmLogin(OneTimePasswordRequest passwordRequest) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
@@ -103,11 +94,12 @@ public class UserCredentialsService {
         }
         if (!oneTimePasswordService.isOtpValid(passwordRequest)) {
             log.warn("Invalid OTP code");
+            userInvalidLoginService.addInvalidAttempt(passwordRequest.getUsername());
             User user = (User) userDetailsManager.loadUserByUsername(passwordRequest.getUsername());
-            // TODO: Add logic for otp code expiration - seems one more endpoint required for this or login with credentials again
             oneTimePasswordService.generateOTP(user);
             return Optional.empty();
         }
+        userInvalidLoginService.onSuccessfulLogin(passwordRequest.getUsername());
         String authenticationToken = accessTokenService.generateToken(authentication);
         return Optional.ofNullable(AuthenticationResponse.builder()
                 .authenticationToken(authenticationToken)
@@ -128,8 +120,7 @@ public class UserCredentialsService {
 
     @Transactional
     public void verifyAccount(String token) {
-        VerificationToken verificationToken = verificationTokenRepository.findByToken(token)
-                .orElseThrow(() -> new EntityNotFoundException("Invalid Token"));
+        VerificationToken verificationToken = verificationTokenService.getVerificationToken(token);
         User user = (User) userDetailsManager.loadUserByUsername(verificationToken.getUser().getUsername());
         user.setEnabled(true);
         userDetailsManager.updateUser(user);
@@ -165,17 +156,18 @@ public class UserCredentialsService {
         mailSenderService.sendMail(simpleMail);
     }
 
-    private String generateAccessToken(User user) {
-        String token = UUID.randomUUID().toString();
-        VerificationToken verificationToken = new VerificationToken();
-        verificationToken.setToken(token);
-        verificationToken.setUser(user);
-        verificationTokenRepository.save(verificationToken);
-        return token;
+    @Transactional
+    public void generateNewOtpCode(String username) {
+        User user = (User) userDetailsManager.loadUserByUsername(username);
+        if (!(user.isEnabled() && user.isAccountNonLocked())) {
+            throw new AccessDeniedException("In order to generate otp code user should be enabled and not locked");
+        }
+        oneTimePasswordService.generateOTP(user);
     }
 
     private void verifyLoginPassword(UserDetails user, LoginRequest loginRequest) {
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+            userInvalidLoginService.addInvalidAttempt(user.getUsername());
             throw new AccessDeniedException("Login failed: password does not match");
         }
     }

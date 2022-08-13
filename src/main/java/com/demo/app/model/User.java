@@ -30,6 +30,7 @@ public class User implements UserDetails {
     private String email;
     private String phoneNumber;
     private boolean enabled;
+    private boolean locked;
     private Instant createdAt;
     @ElementCollection(fetch = FetchType.EAGER)
     private Set<String> authorities = new HashSet<>();
@@ -41,7 +42,7 @@ public class User implements UserDetails {
 
     @Override
     public boolean isAccountNonLocked() {
-        return true;
+        return !locked;
     }
 
     @Override
