@@ -12,18 +12,14 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.provisioning.UserDetailsManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.lang.String.format;
 import static java.time.Instant.now;
@@ -165,7 +161,7 @@ public class UserCredentialsService {
         oneTimePasswordService.generateOTP(user);
     }
 
-    private void verifyLoginPassword(UserDetails user, LoginRequest loginRequest) {
+    private void verifyLoginPassword(User user, LoginRequest loginRequest) {
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             userInvalidLoginService.addInvalidAttempt(user.getUsername());
             throw new AccessDeniedException("Login failed: password does not match");
