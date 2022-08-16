@@ -75,6 +75,13 @@ public class UserCredentialsService {
     }
 
     @Transactional
+    public void verifyAccount(String token) {
+        VerificationToken verificationToken = verificationTokenService.getVerificationToken(token);
+        User user = (User) userDetailsManager.loadUserByUsername(verificationToken.getUser().getUsername());
+        user.setEnabled(true);
+        userDetailsManager.updateUser(user);
+    }
+
     public void login(LoginRequest loginRequest) {
         User user = (User) userDetailsManager.loadUserByUsername(loginRequest.getUsername());
         verifyLoginPassword(user, loginRequest);
@@ -82,7 +89,6 @@ public class UserCredentialsService {
         oneTimePasswordService.generateOTP(user);
     }
 
-    @Transactional
     public Optional<AuthenticationResponse> confirmLogin(OneTimePasswordRequest passwordRequest) {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication == null || !authentication.getName().equals(passwordRequest.getUsername())) {
@@ -90,9 +96,11 @@ public class UserCredentialsService {
         }
         if (!oneTimePasswordService.isOtpValid(passwordRequest)) {
             log.warn("Invalid OTP code");
-            userInvalidLoginService.addInvalidAttempt(passwordRequest.getUsername());
             User user = (User) userDetailsManager.loadUserByUsername(passwordRequest.getUsername());
-            oneTimePasswordService.generateOTP(user);
+            userInvalidLoginService.addInvalidAttempt(passwordRequest.getUsername());
+            if (!user.isLocked()) {
+                oneTimePasswordService.generateOTP(user);
+            }
             return Optional.empty();
         }
         userInvalidLoginService.onSuccessfulLogin(passwordRequest.getUsername());
@@ -112,14 +120,6 @@ public class UserCredentialsService {
                 .refreshToken(refreshTokenRequest.getToken())
                 .expiredAt(Instant.now().plusSeconds(jwtSettings.getExpiredAfter().getSeconds()))
                 .build();
-    }
-
-    @Transactional
-    public void verifyAccount(String token) {
-        VerificationToken verificationToken = verificationTokenService.getVerificationToken(token);
-        User user = (User) userDetailsManager.loadUserByUsername(verificationToken.getUser().getUsername());
-        user.setEnabled(true);
-        userDetailsManager.updateUser(user);
     }
 
     @Transactional

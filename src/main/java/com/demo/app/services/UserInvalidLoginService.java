@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Service
 public class UserInvalidLoginService {
-    private static final int MAX_INVALID_ATTEMPTS = 3;
+    private static final int MAX_INVALID_ATTEMPTS = 2;
     private static final Duration TIME_TO_BLOCK_LOGIN = Duration.ofSeconds(30);
 
     private final UnlockUserRemovalListener unlockUserRemovalListener;
@@ -39,6 +39,9 @@ public class UserInvalidLoginService {
     }
 
     public void addInvalidAttempt(String username) {
+        if (isUserLocked(username)) {
+            return;
+        }
         int invalidAttempts = invalidLoginAttempts.computeIfAbsent(username, attempts -> new AtomicInteger()).incrementAndGet();
         if (invalidAttempts >= MAX_INVALID_ATTEMPTS) {
             lockedUsers.put(username, true);
@@ -52,7 +55,8 @@ public class UserInvalidLoginService {
         invalidLoginAttempts.remove(username);
     }
 
-    public boolean isUserExceededMaxAttempts(String username) {
+    public boolean isUserLocked(String username) {
+        log.info("Locked users: {}", lockedUsers.asMap().keySet());
         return lockedUsers.asMap().containsKey(username);
     }
 
@@ -62,11 +66,11 @@ public class UserInvalidLoginService {
     public static class UnlockUserRemovalListener implements RemovalListener<String, Boolean> {
         private final UserRepository userRepository;
 
-        // does not work :(
+        // does not work on eviction by timeout :(
         @Override
         @Transactional
         public void onRemoval(@Nullable String username, @Nullable Boolean value, @NonNull RemovalCause cause) {
-            log.info("Unlock {} to login", username);
+            log.info("Unlock {} to login. Reason {}", username, cause);
             User user = userRepository.findByUsername(username)
                     .orElseThrow(() -> new EntityNotFoundException("User " + username + " not found"));
             user.setLocked(false);
