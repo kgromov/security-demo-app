@@ -21,6 +21,7 @@ import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
 
+import static com.demo.app.services.UserInvalidLoginService.TIME_TO_BLOCK_LOGIN;
 import static java.lang.String.format;
 import static java.time.Instant.now;
 
@@ -85,6 +86,7 @@ public class UserCredentialsService {
     public void login(LoginRequest loginRequest) {
         User user = (User) userDetailsManager.loadUserByUsername(loginRequest.getUsername());
         verifyLoginPassword(user, loginRequest);
+        userInvalidLoginService.onSuccessfulLogin(user.getUsername());
         authenticationService.authenticate(loginRequest.getUsername(), loginRequest.getPassword());
         oneTimePasswordService.generateOTP(user);
     }
@@ -164,6 +166,9 @@ public class UserCredentialsService {
     private void verifyLoginPassword(User user, LoginRequest loginRequest) {
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             userInvalidLoginService.addInvalidAttempt(user.getUsername());
+            if (user.isLocked()) {
+                throw new AccessDeniedException("Login failed: user is locked for " + TIME_TO_BLOCK_LOGIN);
+            }
             throw new AccessDeniedException("Login failed: password does not match");
         }
     }

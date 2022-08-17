@@ -2,10 +2,7 @@ package com.demo.app.services;
 
 import com.demo.app.model.User;
 import com.demo.app.repositories.UserRepository;
-import com.github.benmanes.caffeine.cache.Cache;
-import com.github.benmanes.caffeine.cache.Caffeine;
-import com.github.benmanes.caffeine.cache.RemovalCause;
-import com.github.benmanes.caffeine.cache.RemovalListener;
+import com.github.benmanes.caffeine.cache.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.checkerframework.checker.nullness.qual.NonNull;
@@ -23,8 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Slf4j
 @Service
 public class UserInvalidLoginService {
-    private static final int MAX_INVALID_ATTEMPTS = 2;
-    private static final Duration TIME_TO_BLOCK_LOGIN = Duration.ofSeconds(30);
+    private static final int MAX_INVALID_ATTEMPTS = 3;
+    static final Duration TIME_TO_BLOCK_LOGIN = Duration.ofMinutes(15);
 
     private final UnlockUserRemovalListener unlockUserRemovalListener;
     private final Cache<String, Boolean> lockedUsers;
@@ -34,7 +31,8 @@ public class UserInvalidLoginService {
         this.unlockUserRemovalListener = unlockUserRemovalListener;
         this.lockedUsers = Caffeine.newBuilder()
                 .expireAfterWrite(TIME_TO_BLOCK_LOGIN)
-                .evictionListener(unlockUserRemovalListener)
+                .scheduler(Scheduler.systemScheduler())
+                .removalListener(unlockUserRemovalListener)
                 .build();
     }
 
@@ -56,7 +54,7 @@ public class UserInvalidLoginService {
     }
 
     public boolean isUserLocked(String username) {
-        log.info("Locked users: {}", lockedUsers.asMap().keySet());
+        log.debug("Locked users: {}", lockedUsers.asMap().keySet());
         return lockedUsers.asMap().containsKey(username);
     }
 
@@ -66,7 +64,6 @@ public class UserInvalidLoginService {
     public static class UnlockUserRemovalListener implements RemovalListener<String, Boolean> {
         private final UserRepository userRepository;
 
-        // does not work on eviction by timeout :(
         @Override
         @Transactional
         public void onRemoval(@Nullable String username, @Nullable Boolean value, @NonNull RemovalCause cause) {
