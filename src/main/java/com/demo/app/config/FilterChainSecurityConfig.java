@@ -1,6 +1,7 @@
 package com.demo.app.config;
 
 import com.demo.app.filters.JwtAuthenticationFilter;
+import com.demo.app.services.JwtTokenConfigurer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,21 +20,20 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableGlobalMethodSecurity(prePostEnabled = true, securedEnabled = true, jsr250Enabled = true)
 @RequiredArgsConstructor
 public class FilterChainSecurityConfig {
-    private final UserDetailsService userDetailsService;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final JwtTokenConfigurer jwtTokenConfigurer;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
-        http.csrf().disable()
+        return http.csrf().disable()
                 .authorizeHttpRequests((auth) -> auth
                         .mvcMatchers("/authentication/**", "/h2_console/**")
                         .permitAll()
                         .anyRequest()
                         .authenticated()
                 )
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .userDetailsService(userDetailsService);
-        return http.build();
+                .apply(jwtTokenConfigurer)
+                .and()
+                .build();
     }
 
     @Bean
