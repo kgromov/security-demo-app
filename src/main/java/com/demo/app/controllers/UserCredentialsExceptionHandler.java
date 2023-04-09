@@ -28,7 +28,7 @@ public class UserCredentialsExceptionHandler extends ResponseEntityExceptionHand
     }
 
     @ExceptionHandler({EntityNotFoundException.class, EntityExistsException.class})
-    protected ResponseEntity<Object> handleNotFounf(RuntimeException e, WebRequest request) {
+    protected ResponseEntity<Object> handleNotFound(RuntimeException e, WebRequest request) {
         return handleExceptionInternal(e, e.getMessage(), new HttpHeaders(), HttpStatus.BAD_REQUEST, request);
     }
 }

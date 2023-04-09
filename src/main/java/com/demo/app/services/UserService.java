@@ -3,6 +3,7 @@ package com.demo.app.services;
 import com.demo.app.model.User;
 import com.demo.app.repositories.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +15,15 @@ import java.util.List;
 public class UserService {
     private final UserRepository userRepository;
 
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     @Transactional(readOnly = true)
-    List<User> getDisabledUsers() {
+    public List<User> getDisabledUsers() {
         return userRepository.findByEnabledFalse();
     }
 
+    @PreAuthorize("hasRole('ROLE_ADMIN')")
     @Transactional
-    void removeUsers(Collection<User> disabledUsers) {
+    public void removeUsers(Collection<User> disabledUsers) {
         userRepository.deleteAllInBatch(disabledUsers);
     }
 }

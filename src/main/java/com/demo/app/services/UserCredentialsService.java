@@ -8,7 +8,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.env.Environment;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.Authentication;
@@ -36,7 +35,6 @@ public class UserCredentialsService {
     private final AccessTokenService accessTokenService;
     private final RefreshTokenService refreshTokenService;
     private final UserDetailsManager userDetailsManager;
-    private final Environment environment;
     private final JwtSettings jwtSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;

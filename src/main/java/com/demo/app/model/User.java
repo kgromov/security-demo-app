@@ -1,6 +1,9 @@
 package com.demo.app.model;
 
 import lombok.*;
+import org.hibernate.annotations.Cascade;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -24,6 +27,7 @@ import java.util.stream.Collectors;
 public class User implements UserDetails {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @Column(name = "user_id")
     private Long id;
     private String username;
     private String password;
@@ -32,7 +36,17 @@ public class User implements UserDetails {
     private boolean enabled;
     private boolean locked;
     private Instant createdAt;
+
+    // This allows to remove the item from SQL (outside of the entityManager)
+    // Alternatively FK definition can be provided explicitly in @CollectionTable:
+    /*foreignKey = @ForeignKey(
+            name = "fk_Authority_user",
+            foreignKeyDefinition = "foreign key (authority_id) references Users (user_id) on delete cascade")*/
+    // All listed relevant for tables either generated automatically or when cascade is not specified on migration level
+    @OnDelete(action = OnDeleteAction.CASCADE)
     @ElementCollection(fetch = FetchType.EAGER)
+    @JoinColumn(name = "user_id")
+    @CollectionTable(name = "user_authority", joinColumns = @JoinColumn(name = "user_id"))
     private Set<String> authorities = new HashSet<>();
     private String mfaSecret;
 
