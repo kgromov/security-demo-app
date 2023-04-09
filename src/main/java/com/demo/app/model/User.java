@@ -48,6 +48,7 @@ public class User implements UserDetails {
     @JoinColumn(name = "user_id")
     @CollectionTable(name = "user_authority", joinColumns = @JoinColumn(name = "user_id"))
     private Set<String> authorities = new HashSet<>();
+    private String mfaSecret;
 
     @Override
     public boolean isAccountNonExpired() {

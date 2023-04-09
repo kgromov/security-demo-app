@@ -5,6 +5,7 @@ import com.demo.app.dtos.*;
 import com.demo.app.model.User;
 import com.demo.app.model.VerificationToken;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.access.AccessDeniedException;
@@ -38,6 +39,8 @@ public class UserCredentialsService {
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;
     private final UserInvalidLoginService userInvalidLoginService;
+    private final QrCodeService qrCodeService;
+    private final HtmlMessageDecorator messageDecorator;
 
     @Value("${spring.application.name}")
     private String appName;
@@ -48,6 +51,7 @@ public class UserCredentialsService {
     @Value("${mail.verification.address}")
     private String address;
 
+    @SneakyThrows
     @Transactional
     public void signup(RegistrationRequest registerRequest) {
         User user = User.builder()
@@ -58,27 +62,34 @@ public class UserCredentialsService {
                 .createdAt(now())
                 .enabled(false)
                 .authorities(Set.of("ROLE_USER"))
+                .mfaSecret(qrCodeService.generateSecretKey())
                 .build();
         userDetailsManager.createUser(user);
 
         // send verification link to user email
         String token = verificationTokenService.generateVerificationToken(user);
+        // TODO: add one more step - verify by url with uuid per user (e.g. generate another QR code)
+        // or just add more text details - keep link to activate user account + explanation for QR code
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
                 .from(sender)
                 .to(user.getEmail())
                 .subject("Activate your account")
                 .body(format("Thank you for signing up to %s, please click on the below url to activate your account: "
                         + "%s/authentication/accountVerification/%s", appName, address, token))
+                .base64Image(qrCodeService.getQRCode(user.getMfaSecret()))
                 .build();
-        mailSenderService.sendMail(simpleMail);
+        SimpleMailMessage decoratedMail = messageDecorator.decorate(simpleMail);
+        mailSenderService.sendMail(decoratedMail);
     }
 
     @Transactional
-    public void verifyAccount(String token) {
+    @SneakyThrows
+    public String verifyAccount(String token) {
         VerificationToken verificationToken = verificationTokenService.getVerificationToken(token);
         User user = (User) userDetailsManager.loadUserByUsername(verificationToken.getUser().getUsername());
         user.setEnabled(true);
         userDetailsManager.updateUser(user);
+        return qrCodeService.getQRCode(user.getMfaSecret());
     }
 
     public void login(LoginRequest loginRequest) {
@@ -94,6 +105,19 @@ public class UserCredentialsService {
         if (authentication == null || !authentication.getName().equals(passwordRequest.getUsername())) {
             throw new BadCredentialsException("User is not authenticated");
         }
+//        if (!validateOtpViaSms(passwordRequest)) {
+        if (!validateOtpWithAuthenticator(passwordRequest)) {
+            return Optional.empty();
+        }
+        String authenticationToken = accessTokenService.generateToken(authentication);
+        return Optional.ofNullable(AuthenticationResponse.builder()
+                .authenticationToken(authenticationToken)
+                .refreshToken(refreshTokenService.generateToken().getToken())
+                .expiredAt(Instant.now().plus(jwtSettings.getExpiredAfter()))
+                .build());
+    }
+
+    private boolean validateOtpViaSms(OneTimePasswordRequest passwordRequest) {
         if (!oneTimePasswordService.isOtpValid(passwordRequest)) {
             log.warn("Invalid OTP code");
             User user = (User) userDetailsManager.loadUserByUsername(passwordRequest.getUsername());
@@ -101,15 +125,21 @@ public class UserCredentialsService {
             if (!user.isLocked()) {
                 oneTimePasswordService.generateOTP(user);
             }
-            return Optional.empty();
+            return false;
         }
         userInvalidLoginService.onSuccessfulLogin(passwordRequest.getUsername());
-        String authenticationToken = accessTokenService.generateToken(authentication);
-        return Optional.ofNullable(AuthenticationResponse.builder()
-                .authenticationToken(authenticationToken)
-                .refreshToken(refreshTokenService.generateToken().getToken())
-                .expiredAt(Instant.now().plus(jwtSettings.getExpiredAfter()))
-                .build());
+        return true;
+    }
+
+    private boolean validateOtpWithAuthenticator(OneTimePasswordRequest passwordRequest) {
+        User user = (User) userDetailsManager.loadUserByUsername(passwordRequest.getUsername());
+        if (!qrCodeService.verifyTotp(passwordRequest.getCode(), user.getMfaSecret())) {
+            log.warn("Invalid OTP code");
+            userInvalidLoginService.addInvalidAttempt(passwordRequest.getUsername());
+            return false;
+        }
+        userInvalidLoginService.onSuccessfulLogin(passwordRequest.getUsername());
+        return true;
     }
 
     public AuthenticationResponse refreshToken(RefreshTokenRequest refreshTokenRequest) {
