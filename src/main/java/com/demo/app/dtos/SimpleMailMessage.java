@@ -15,4 +15,5 @@ public class SimpleMailMessage {
     private String to;
     private String subject;
     private String body;
+    private String base64Image;
 }

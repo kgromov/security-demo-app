@@ -34,6 +34,7 @@ public class User implements UserDetails {
     private Instant createdAt;
     @ElementCollection(fetch = FetchType.EAGER)
     private Set<String> authorities = new HashSet<>();
+    private String mfaSecret;
 
     @Override
     public boolean isAccountNonExpired() {

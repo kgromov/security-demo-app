@@ -28,8 +28,9 @@ public class AuthenticationController {
     @GetMapping("/accountVerification/{verificationToken}")
     public ResponseEntity<String> activateAccount(@PathVariable String verificationToken) {
         try {
-            userCredentialsService.verifyAccount(verificationToken);
-            return ResponseEntity.ok("Account Activated Successfully");
+            String qrCode = userCredentialsService.verifyAccount(verificationToken);
+//            return ResponseEntity.ok("Account Activated Successfully");
+            return ResponseEntity.ok(qrCode);
         } catch (EntityNotFoundException e) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid verification token", e);
         }
@@ -68,7 +69,7 @@ public class AuthenticationController {
         return new ResponseEntity<>(HttpStatus.ACCEPTED);
     }
 
-    @PostMapping("/generateCode/${username}")
+    @PostMapping("/generateCode/{username}")
     public ResponseEntity<Void> generateNewCode(@PathVariable String username) {
         userCredentialsService.generateNewOtpCode(username);
         return new ResponseEntity<>(HttpStatus.OK);
