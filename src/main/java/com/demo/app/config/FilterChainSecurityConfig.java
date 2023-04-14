@@ -1,6 +1,8 @@
 package com.demo.app.config;
 
 import com.demo.app.filters.JwtAuthenticationFilter;
+import com.demo.app.security.CustomAuthenticationProvider;
+import com.demo.app.security.CustomWebAuthenticationDetailsSource;
 import dev.samstevens.totp.code.CodeVerifier;
 import dev.samstevens.totp.code.DefaultCodeGenerator;
 import dev.samstevens.totp.code.DefaultCodeVerifier;
@@ -13,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.method.configuration.EnableGlobalMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -29,6 +32,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class FilterChainSecurityConfig {
     private final UserDetailsService userDetailsService;
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private CustomAuthenticationProvider customAuthenticationProvider;
+    private final CustomWebAuthenticationDetailsSource authenticationDetailsSource;
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
@@ -40,7 +45,9 @@ public class FilterChainSecurityConfig {
                         .authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
-                .userDetailsService(userDetailsService);
+                .userDetailsService(userDetailsService)
+                .formLogin()
+                .authenticationDetailsSource(authenticationDetailsSource);
         return http.build();
     }
 
@@ -49,11 +56,15 @@ public class FilterChainSecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    @Bean
+    /*@Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration authenticationConfiguration) throws Exception {
         return authenticationConfiguration.getAuthenticationManager();
-    }
+    }*/
 
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationManagerBuilder authenticationManagerBuilder) throws Exception {
+        return authenticationManagerBuilder.authenticationProvider(customAuthenticationProvider).build();
+    }
     @Bean
     public WebSecurityCustomizer webSecurityCustomizer() {
         return (web) -> web.ignoring().mvcMatchers("/resources/**", "/static/**");

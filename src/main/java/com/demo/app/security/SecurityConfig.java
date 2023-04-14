@@ -1,4 +1,4 @@
-package com.demo.app.config;
+package com.demo.app.security;
 
 import com.demo.app.filters.JwtAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
