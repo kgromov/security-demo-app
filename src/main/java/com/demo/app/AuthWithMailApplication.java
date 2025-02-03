@@ -1,6 +1,7 @@
 package com.demo.app;
 
 import com.demo.app.config.JwtSettings;
+import com.demo.app.config.SendgridSettings;
 import com.demo.app.config.SmsSettings;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -12,7 +13,11 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 @EnableWebSecurity
 @EnableAsync
 @EnableScheduling
-@EnableConfigurationProperties({JwtSettings.class, SmsSettings.class})
+@EnableConfigurationProperties({
+        JwtSettings.class,
+        SmsSettings.class,
+        SendgridSettings.class
+})
 @SpringBootApplication
 public class AuthWithMailApplication {
 

@@ -1,6 +1,7 @@
 package com.demo.app.services;
 
 import com.demo.app.config.JwtSettings;
+import com.demo.app.config.SendgridSettings;
 import com.demo.app.dtos.*;
 import com.demo.app.model.User;
 import com.demo.app.model.VerificationToken;
@@ -37,6 +38,7 @@ public class UserCredentialsService {
     private final UserDetailsManager userDetailsManager;
     private final Environment environment;
     private final JwtSettings jwtSettings;
+    private final SendgridSettings sendgridSettings;
     private final UsernamePasswordAuthenticationService authenticationService;
     private final OneTimePasswordService oneTimePasswordService;
     private final UserInvalidLoginService userInvalidLoginService;
@@ -44,11 +46,8 @@ public class UserCredentialsService {
     @Value("${spring.application.name}")
     private String appName;
 
-    @Value("${mail.verification.sender}")
-    private String sender;
-
-    @Value("${mail.verification.address}")
-    private String address;
+    @Value("${mail.verification.url}")
+    private String url;
 
     @Transactional
     public void signup(RegistrationRequest registerRequest) {
@@ -66,11 +65,11 @@ public class UserCredentialsService {
         // send verification link to user email
         String token = verificationTokenService.generateVerificationToken(user);
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
-                .from(sender)
+                .from(sendgridSettings.getSender())
                 .to(user.getEmail())
                 .subject("Activate your account")
                 .body(format("Thank you for signing up to %s, please click on the below url to activate your account: "
-                        + "%s/authentication/accountVerification/%s", appName, address, token))
+                        + "%s/authentication/accountVerification/%s", appName, url, token))
                 .build();
         mailSenderService.sendMail(simpleMail);
     }
@@ -142,11 +141,11 @@ public class UserCredentialsService {
         String mailBody = new StringBuilder()
                 .append("Password was successfully changed for user")
                 .append(principal.getUsername()).append('\n')
-                .append("Navigate to ").append(address).append("/authentication/login")
+                .append("Navigate to ").append(url).append("/authentication/login")
                 .append("  login with new credentials")
                 .toString();
         SimpleMailMessage simpleMail = SimpleMailMessage.builder()
-                .from(sender)
+                .from(sendgridSettings.getSender())
                 .to(principal.getEmail())
                 .subject("Changing password")
                 .body(mailBody)

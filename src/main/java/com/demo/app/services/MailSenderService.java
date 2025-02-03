@@ -1,30 +1,51 @@
 package com.demo.app.services;
 
+import com.demo.app.config.SendgridSettings;
 import com.demo.app.dtos.SimpleMailMessage;
+import com.sendgrid.Method;
+import com.sendgrid.Request;
+import com.sendgrid.Response;
+import com.sendgrid.SendGrid;
+import com.sendgrid.helpers.mail.Mail;
+import com.sendgrid.helpers.mail.objects.Content;
+import com.sendgrid.helpers.mail.objects.Email;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
-import org.springframework.mail.javamail.MimeMessagePreparator;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+
+import java.io.IOException;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class MailSenderService {
-    private final JavaMailSender mailSender;
+    private final SendgridSettings sendgridSettings;
 
     @Async
-    public void sendMail(SimpleMailMessage mail) {
-        MimeMessagePreparator messagePreparator = mimeMessage -> {
-            MimeMessageHelper messageHelper = new MimeMessageHelper(mimeMessage);
-            mimeMessage.setFrom(mail.getFrom());
-            messageHelper.setTo(mail.getTo());
-            messageHelper.setSubject(mail.getSubject());
-            messageHelper.setText(mail.getBody());
-        };
-        mailSender.send(messagePreparator);
-        log.info("Mail '{}' from {} to {} was successfully sent", mail.getSubject(), mail.getFrom(), mail.getTo());
+    public void sendMail(SimpleMailMessage message) {
+        Email from = new Email(message.getFrom());
+        Email toEmail = new Email(message.getTo());
+        Content emailContent = new Content("text/plain", message.getBody());
+        Mail mail = new Mail(from, message.getSubject(), toEmail, emailContent);
+
+        SendGrid sg = new SendGrid(sendgridSettings.getApiKey());
+        Request request = new Request();
+
+        try {
+            request.setMethod(Method.POST);
+            request.setEndpoint("mail/send");
+            request.setBody(mail.build());
+
+            Response response = sg.api(request);
+
+            log.info("Mail '{}' from {} to {} was successfully sent",
+                    message.getSubject(), message.getFrom(), message.getTo());
+            log.info("Response: {Status Code: {}, Body: {}, Headers: {} }",
+                    response.getStatusCode(), response.getBody(), response.getHeaders());
+        } catch (IOException ex) {
+            throw new RuntimeException("Failed to send email: " + ex.getMessage());
+        }
     }
 }
+
